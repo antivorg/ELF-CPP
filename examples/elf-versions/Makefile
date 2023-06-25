@@ -16,10 +16,10 @@ OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
 
 $(ODIR)/%.o: %.c $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(EDIR)/$(OUT): $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CC) $(CLFAGS) -o $@ $^
 	rm $(OBJ)
 
 .PHONY: clean

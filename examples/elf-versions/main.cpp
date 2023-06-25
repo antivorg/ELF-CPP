@@ -18,9 +18,10 @@ int main(void) {
 	#ifdef SHOW_MIPS
 	// mips-linux-gnu-gcc (Ubuntu 10.3.0-1ubuntu1) 10.3.0
 	auto elfFile = elfFac->read_file("../test-elfs/gcc-mips-linux.out");
-	elfFile->print_elf_header();
+	//elfFile->print_elf_header();
 	#ifdef SHOW_SECTS_SEGS
 	elfFile->print_sections();
+	elfFile->print_segments();
 	#endif
 	delete elfFile;
 	#endif

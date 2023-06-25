@@ -11,8 +11,7 @@
 #include <iostream>
 #include <algorithm>
 #include <map>
-#include <bitset>
-
+#include <cmath>
 
 namespace elf {
 
@@ -214,6 +213,14 @@ typedef struct programHeader64_t {
         Elf64_Xword p_align;
 } programHeader64_t;
 
+typedef struct segment32_t : programHeader32_t {
+	std::vector<int> sectionMapIndexes;
+} segment32_t;
+
+typedef struct segment64_t : programHeader64_t {
+	std::vector<int> sectionMapIndexes;
+} segment64_t;
+
 typedef struct sectionHeader32_t {
 	Elf32_Word sh_name;
 	Elf32_Word sh_type;
@@ -252,6 +259,7 @@ typedef struct section64_t : sectionHeader64_t {
 
 
 bool compare_section_32(const section32_t& a, const section32_t& b);
+bool compare_segments_32(const segment32_t& a, const segment32_t& b);
 
 
 class elf_parser {
@@ -262,10 +270,13 @@ class elf_parser {
 		virtual std::vector<std::uint8_t> read_section(std::string name) = 0;
 		virtual void print_elf_header(void) = 0;
 		virtual void print_sections(void) = 0;
+		virtual void print_segments(void) = 0;
 		virtual void print_symbol_table(void) = 0;
 
 	protected:
 		unsigned int join_bytes(std::vector<std::uint8_t>::iterator ptr, int numOfBytes, bool bigEndian);
+		virtual std::vector<int> map_sections_to_segments(std::uint32_t offset,
+                        std::uint32_t size, std::vector<int> result=std::vector<int>(), int index=0) = 0;
 		std::map<std::uint8_t, std::string> EI_OSABI {
 			{0x00, "System V"}, {0x01, "HP-UX"}, {0x02, "NetBSD"}, {0x03, "Linux"}, {0x04, "GNU Hurd"},
 			{0x06, "Solaris"}, {0x07, "AIX (Monterey)"}, {0x08, "IRIX"}, {0x09, "FreeBSD"},
@@ -309,6 +320,15 @@ class elf_parser {
 			{0xB7, "Arm 64-bits (Armv8/AArch64)"}, {0xDC, "Zilog Z80"}, {0xF3, "RISC-V"},
 			{0xF7, "Berkeley Packet Filter"}, {0x101, "WDC 65C816"}
 		};
+		std::map<std::uint32_t, std::string> programType {
+			{0x00, "NULL"}, {0x01, "LOAD"}, {0x02, "DYNAMIC"}, {0x03, "INTERP"},
+			{0x04, "NOTE"}, {0x05, "SHLIB"}, {0x06, "PHDR"}, {0x07, "TLS"},
+			{0x60000000, "LOOS"}, {0x6FFFFFFF, "HIOS"}, {0x70000000, "LOPROC"},
+			{0x7FFFFFFF, "HIPROC"},
+		};
+		 std::map<std::uint32_t, std::vector<std::string>> programFlags {
+			 {0x1, {"Executable", "E"}}, {0x2, {"Writable", "W"}}, {0x4, {"Readable", "R"}}
+		};
 		std::map<std::uint32_t, std::string> sectionType {
 			{0x00,  "NULL"}, {0x01,  "PROGBITS"}, {0x02,  "SYMTAB"}, {0x03,  "STRTAB"},
 			{0x04,  "RELA"}, {0x05,  "HASH"}, {0x06,  "DYNAMIC"}, {0x07,  "NOTE"}, {0x08,  "NOBITS"},
@@ -320,8 +340,8 @@ class elf_parser {
 			{0x01, {"SHF_WRITE", "W"}}, {0x02, {"SHF_ALLOC", "A"}}, {0x04, {"SHF_EXECINSTR", "X"}},
 			{0x10, {"SHF_MERGE", "M"}}, {0x20, {"SHF_STRINGS", "S"}}, {0x40, {"SHF_INFO_LINK", "I"}},
 			{0x80, {"SHF_LINK_ORDER", "L"}}, {0x100, {"SHF_OS_NONCONFORMING", "O"}},
-			{0x200, {"SHF_GROUP", "G"}}, {0x400, {"SHF_TLS", "T"}}, {0x0FF00000, {"SHF_MASKOS", ""}},
-			{0xF0000000, {"SHF_MASKPROC", ""}}, {0x4000000, {"SHF_ORDERED", ""}},
+			{0x200, {"SHF_GROUP", "G"}}, {0x400, {"SHF_TLS", "T"}}, {0x0FF00000, {"SHF_MASKOS", "o"}},
+			{0xF0000000, {"SHF_MASKPROC", "p"}}, {0x4000000, {"SHF_ORDERED", ""}},
 			{0x8000000, {"SHF_EXCLUDE", ""}}
 		};
 };
@@ -331,15 +351,17 @@ class elf_32_parser : public elf_parser {
 
 	private:
                 elf32Header_t elfHeader;
-		std::vector<programHeader32_t> programHeaders;
+		std::vector<segment32_t> programHeaderTable;
                 std::vector<section32_t> sectionHeaderTable;
-
+		std::vector<int> map_sections_to_segments(std::uint32_t offset,
+                        std::uint32_t size, std::vector<int> result=std::vector<int>({}), int index=0) override;
 
 	public:
 		elf_32_parser(std::vector<std::uint8_t> bytes);
 		std::vector<std::uint8_t> read_section(std::string name) override;
 		void print_elf_header(void) override;
 		void print_sections(void) override;
+		void print_segments(void) override;
 		void print_symbol_table(void) override;
 };
 
@@ -350,22 +372,30 @@ class elf_64_parser : public elf_parser {
                 elf64Header_t elfHeader;
 		std::vector<programHeader64_t> programHeaders;
                 std::vector<sectionHeader64_t> sectionHeaderTable;
+		std::vector<int> map_sections_to_segments(std::uint32_t offset,
+                        std::uint32_t size, std::vector<int> result=std::vector<int>(), int index=0) override {return std::vector<int>();}
 
 	public:
 		elf_64_parser(std::vector<std::uint8_t> bytes);
 		std::vector<std::uint8_t> read_section(std::string name) override {return std::vector<std::uint8_t>();}
 		void print_elf_header(void) override {}
 		void print_sections(void) override {}
+		void print_segments(void) override {}
 		void print_symbol_table(void) override {}
 };
 
 
 class elf_error : public elf_parser {
 	// Factory error class (default return value if exception thrown)
+	private:
+		std::vector<int> map_sections_to_segments(uint32_t offset,
+                        uint32_t size, std::vector<int> result=std::vector<int>(), int index=0) override {return std::vector<int>();}
+	
 	public:
 		std::vector<std::uint8_t> read_section(std::string name) override {return std::vector<std::uint8_t>();}
                 void print_elf_header(void) override {}
                 void print_sections(void) override {}
+		void print_segments(void) override {}
                 void print_symbol_table(void) override {}
 };
 
