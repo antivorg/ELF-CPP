@@ -197,19 +197,36 @@ std::vector<int> elf_32_parser::map_sections_to_segments(std::uint32_t offset,
 		std::cout << " correct " << std::endl;
 		return result;
 	}
+	int closestIndex = sectionHeaderTable.size()-1;
 	for (int i=index; i<sectionHeaderTable.size(); i++) {
 		if (sectionHeaderTable[i].sh_offset == offset) {
-			std::cout << "sec: " << sectionHeaderTable[i].sh_size << '\t' << sectionHeaderTable[i].sh_offset << std::endl;
+			std::cout << "sec: " << sectionHeaderTable[i].sh_size;
+			std::cout << '\t' << sectionHeaderTable[i].sh_offset << std::endl;
+			std::cout << sectionHeaderTable[i].name << std::endl;
 			result.push_back(i);
 			if (sectionHeaderTable[i].sh_size == 0) {
+				std::cout << "zero" << std::endl;
 				continue;
 			}
-			result = map_sections_to_segments(
+			return result = map_sections_to_segments(
 				offset+sectionHeaderTable[i].sh_size,
 				size-sectionHeaderTable[i].sh_size, result, i+1);
+		} else if (sectionHeaderTable[i].sh_offset > offset
+				&& sectionHeaderTable[i].sh_offset
+				< sectionHeaderTable[closestIndex].sh_offset) {
+			closestIndex = i;
 		}
 	}
-
+	//No contiguous match, check closest
+	if (sectionHeaderTable[closestIndex].sh_offset < offset+size) {
+		std::cout << "dec: " << sectionHeaderTable[closestIndex].name << std::endl;
+		result.push_back(closestIndex);
+		return result = map_sections_to_segments(
+				sectionHeaderTable[closestIndex].sh_offset+sectionHeaderTable[closestIndex].sh_size,
+				size-sectionHeaderTable[closestIndex].sh_size
+					-(sectionHeaderTable[closestIndex].sh_offset-offset)
+						, result, closestIndex+1);
+	}
        	// EOF
 	std::cout << " incorrect " << std::endl;
 	return result;
@@ -354,7 +371,7 @@ void elf_32_parser::print_segments(void) {
 		<< std::setw(std::ceil(std::log10(programHeaderTable.size())));
 		std::cout << i;
 		for (int secHedIndex : programHeaderTable[i].sectionMapIndexes) {
-			std::cout << ' ' << sectionHeaderTable[i].name;
+			std::cout << ' ' << sectionHeaderTable[secHedIndex].name;
 		}
 		std::cout << std::endl;
 	}

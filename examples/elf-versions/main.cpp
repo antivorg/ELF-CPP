@@ -20,7 +20,7 @@ int main(void) {
 	auto elfFile = elfFac->read_file("../test-elfs/gcc-mips-linux.out");
 	//elfFile->print_elf_header();
 	#ifdef SHOW_SECTS_SEGS
-	elfFile->print_sections();
+	//elfFile->print_sections();
 	elfFile->print_segments();
 	#endif
 	delete elfFile;

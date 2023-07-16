@@ -20,7 +20,6 @@ $(ODIR)/%.o: %.c $(DEPS)
 
 $(EDIR)/$(OUT): $(OBJ)
 	$(CC) $(CLFAGS) -o $@ $^
-	rm $(OBJ)
 
 .PHONY: clean
 clean:
